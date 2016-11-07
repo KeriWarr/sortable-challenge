@@ -1,0 +1,29 @@
+{
+  "name": "sortable-challenge",
+  "version": "0.1.0",
+  "description": "My submission for the Sortable coding challenge",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "babel index.js > run.js",
+    "run": "node run.js",
+    "start": "npm run build; npm run run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KeriWarr/sortable-challenge.git"
+  },
+  "author": "Keri Warr",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/KeriWarr/sortable-challenge/issues"
+  },
+  "homepage": "https://github.com/KeriWarr/sortable-challenge#readme",
+  "dependencies": {
+    "lodash": "^4.16.6"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.18.0",
+    "babel-preset-latest": "^6.16.0"
+  }
+}
