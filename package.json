@@ -4,7 +4,8 @@
   "description": "My submission for the Sortable coding challenge",
   "main": "index.js",
   "scripts": {
-    "postinstall": "npm run start -s && echo \"All done! Results are in results.txt\"",
+    "go": "npm install --production > /dev/null && echo \"All done! Check out results.txt\"",
+    "postinstall": "npm run start",
     "dev": "babel index.js -o run.js -w --source-maps & nodemon -w index.js",
     "build": "babel -o run.js index.js",
     "run": "node run.js",
