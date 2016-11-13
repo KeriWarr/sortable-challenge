@@ -4,8 +4,9 @@
   "description": "My submission for the Sortable coding challenge",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "babel index.js > run.js",
+    "postinstall": "npm run start -s && echo \"All done! Results are in results.txt\"",
+    "dev": "babel index.js -o run.js -w --source-maps & nodemon -w index.js",
+    "build": "babel -o run.js index.js",
     "run": "node run.js",
     "start": "npm run build; npm run run"
   },
@@ -20,10 +21,11 @@
   },
   "homepage": "https://github.com/KeriWarr/sortable-challenge#readme",
   "dependencies": {
+    "babel-cli": "^6.18.0",
+    "babel-preset-latest": "^6.16.0",
     "lodash": "^4.16.6"
   },
   "devDependencies": {
-    "babel-cli": "^6.18.0",
-    "babel-preset-latest": "^6.16.0"
+    "nodemon": "^1.11.0"
   }
 }

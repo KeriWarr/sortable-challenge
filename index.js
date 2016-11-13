@@ -1,8 +1,10 @@
-import { createReadStream } from 'fs';
+import { createReadStream, createWriteStream } from 'fs';
+import _ from 'lodash';
 import { createInterface } from 'readline';
 
 const PRODUCTS_FILE = 'products.txt';
 const LISTINGS_FILE = 'listings.txt';
+const RESULTS_FILE = 'results.txt';
 
 const productsLineReader = createInterface({
   input: createReadStream(PRODUCTS_FILE),
@@ -10,6 +12,7 @@ const productsLineReader = createInterface({
 const listingsLineReader = createInterface({
   input: createReadStream(LISTINGS_FILE),
 });
+const resultsWriteStream = createWriteStream(RESULTS_FILE);
 
 let products = [];
 let listings = [];
@@ -47,5 +50,9 @@ function dataIsLoaded() {
     });
   });
 
-  console.log(JSON.stringify(products.slice(100), null, 2));
+  products.forEach(product => {
+    resultsWriteStream.write(`${JSON.stringify(
+      _.pick(product, 'product_name', 'listings')
+    )}\n`);
+  });
 }
