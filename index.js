@@ -9,39 +9,40 @@ import { createInterface } from 'readline';
 /**
  *
  */
-const firstPass = (products, listings) =>
-  products.map(product => Object.assign({}, product, {
-    listings: listings.reduce((productListings, listing) => {
-      const productManufacturerRegex =
-        new RegExp(`^${product.manufacturer}$`, 'i');
-      const productModelRegex = new RegExp(product.model, 'i');
-      const productFamilyRegex = new RegExp(product.family || '', 'i');
+const naiveMatching = (products, listings) =>
+  products.map((product) => {
+    const nonLabelChar = '[^a-z0-9]?';
+    const matchAnyPunctuation = label =>
+      `(${label.replace(
+        new RegExp(nonLabelChar),
+        nonLabelChar,
+      )})`;
+    const productManufacturerRegex =
+      new RegExp(`^${product.manufacturer}$`, 'i');
+    const productModelRegex = new RegExp(
+      `^(?:.*${nonLabelChar})?${matchAnyPunctuation(product.model)}(?:${nonLabelChar}.*)?$`,
+      'i',
+    );
+    const productFamilyRegex = product.family &&
+      new RegExp(
+        `^(?:.*${nonLabelChar})?${matchAnyPunctuation(product.family)}(?:${nonLabelChar}.*)?$`,
+        'i',
+      );
 
-      if (productManufacturerRegex.test(listing.manufacturer)
-        && productModelRegex.test(listing.title)
-        && productFamilyRegex.test(listing.title)) {
-        return productListings.concat([listing]);
-      }
-      return productListings;
-    }, product.listings),
-  }));
+    return Object.assign({}, product, {
+      listings: listings.filter(listing =>
+        productManufacturerRegex.test(listing.manufacturer) &&
+        productModelRegex.test(listing.title) &&
+        (productFamilyRegex ? productFamilyRegex.test(listing.title) : true),
+      ),
+    });
+  });
 
-
-/**
- *
- */
 const generateResults = (products, listings) => {
   const resultsProperties = ['product_name', 'listings'];
-  const productsWithListings = products.map(
-    product => Object.assign({},
-      product,
-      { listings: [] },
-    ),
-  );
+  const naiveMatchingProducts = naiveMatching(products, listings);
 
-  const firstPassProducts = firstPass(productsWithListings, listings);
-
-  return firstPassProducts.map(R.pick(resultsProperties));
+  return naiveMatchingProducts.map(R.pick(resultsProperties));
 };
 
 
@@ -61,7 +62,6 @@ const generateResults = (products, listings) => {
   };
   const resultsFile = 'results.txt';
   const resultsWriteStream = createWriteStream(resultsFile);
-
   const totalReaderCount = R.keys(inputFiles).length;
   let closedReaderCount = 0;
 
@@ -77,9 +77,9 @@ const generateResults = (products, listings) => {
     }
   };
 
-  R.values(inputFiles).map(({ fileName, data }) =>
+  R.values(inputFiles).forEach(({ fileName, data }) => {
     createInterface({ input: createReadStream(fileName) })
       .on('line', line => data.push(JSON.parse(line)))
-      .on('close', handleReaderClosed),
-  );
+      .on('close', handleReaderClosed);
+  });
 })();
