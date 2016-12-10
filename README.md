@@ -1,4 +1,13 @@
 # Sortable Challenge
 
-Run: `npm run go -s`  
-Results will be in `results.txt`
+## Dependencies
+
+You must have `node` and `npm` installed.
+
+## Usage
+
+`npm run go -s`  
+
+## Author
+
+Keri Warr
