@@ -23,7 +23,7 @@
   "homepage": "https://github.com/KeriWarr/sortable-challenge#readme",
   "dependencies": {
     "babel-cli": "^6.18.0",
-    "babel-preset-latest": "^6.16.0",
+    "babel-preset-env": "^1.0.2",
     "ramda": "^0.22.1"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@ import { createReadStream, createWriteStream } from 'fs';
 import { createInterface } from 'readline';
 
 
-/* ----------- DATA PROCESSING ----------- */
+/* ----------- HELPER METHODS ----------- */
 
 
 /**
@@ -46,7 +46,7 @@ const generateResults = (products, listings) => {
 };
 
 
-/* ----------- FILE PROCESSING ----------- */
+/* ----------- ENTRY POINT ----------- */
 
 
 (() => {
@@ -69,9 +69,9 @@ const generateResults = (products, listings) => {
     closedReaderCount += 1;
 
     if (closedReaderCount === totalReaderCount) {
-      const { products, listings } = inputFiles;
+      const data = R.map(R.prop('data'), R.values(inputFiles));
 
-      generateResults(products.data, listings.data).forEach(result =>
+      generateResults(...data).forEach(result =>
         resultsWriteStream.write(`${JSON.stringify(result)}\n`),
       );
     }
