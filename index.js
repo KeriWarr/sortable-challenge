@@ -11,12 +11,12 @@ import { createInterface } from 'readline';
  */
 const naiveMatching = (products, listings) =>
   products.map((product) => {
-    const nonLabelChar = '[^a-z0-9]?';
+    const nonLabelChar = '[^a-z0-9]';
     const matchAnyPunctuation = label =>
-      `(${label.replace(
-        new RegExp(nonLabelChar),
-        nonLabelChar,
-      )})`;
+      label
+        .replace(new RegExp(nonLabelChar, 'i'), '')
+        .split('')
+        .join(`${nonLabelChar}?`);
     const productManufacturerRegex =
       new RegExp(`^${product.manufacturer}$`, 'i');
     const productModelRegex = new RegExp(
