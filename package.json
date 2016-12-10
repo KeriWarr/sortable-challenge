@@ -6,7 +6,7 @@
   "scripts": {
     "go": "npm install --production > /dev/null && echo \"All done! Check out results.txt\"",
     "postinstall": "npm run start",
-    "dev": "babel index.js -o run.js -w --source-maps & nodemon -w index.js",
+    "dev": "babel index.js -o run.js -w --source-maps & nodemon -w run.js run.js",
     "build": "babel -o run.js index.js",
     "run": "node run.js",
     "start": "npm run build && npm run run"
