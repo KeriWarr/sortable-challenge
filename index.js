@@ -14,6 +14,13 @@ const generateResults = (() => {
    */
   const nonLabelChar = '[^a-z0-9.]';
 
+  const currencyConversion = {
+    CAD: 1,
+    USD: 1.21,
+    GBP: 1.83,
+    EUR: 1.37,
+  };
+
   /**
    * String -> String
    *
@@ -90,17 +97,30 @@ const generateResults = (() => {
     similarModelTest(product),
   ]);
 
+  const ListingBonusRegex = /\+\s*\w{2,}\s+\w{2,}.*/;
+
   /**
    * [Listing] -> Product -> Product'
    *
    * returns a product that has been augmented with all listings that naively
    * match it.
+   *
+   * Modifies the working title of the listing such that suffixes such as:
+   *   " + Accessory Kit for ... <model_names> ..." are removed.
    */
-  const augmentWithNaiveListings = R.curry((listings, product) =>
-    Object.assign({}, {
-      listings: listings.filter(naiveMatching(product)),
-    }, product),
-  );
+  const augmentWithNaiveListings = (listings) => {
+    const workingListings = listings.map(listing => ({
+      listing,
+      manufacturer: listing.manufacturer,
+      title: listing.title.replace(ListingBonusRegex, ''),
+    }));
+
+    return product => Object.assign({}, product, {
+      listings: workingListings
+        .filter(naiveMatching(product))
+        .map(listing => listing.listing),
+    });
+  };
 
   /**
    * [Product] -> Product -> Product
@@ -112,7 +132,7 @@ const generateResults = (() => {
    * otherwise be recognized as belonging to this model.
    */
   const findSimilarModels = R.curry((products, product) =>
-    Object.assign({}, {
+    Object.assign({}, product, {
       similarModels: products
         .filter(p =>
           (product.model !== p.model) &&
@@ -121,7 +141,7 @@ const generateResults = (() => {
             p.model,
           )),
         ).map(p => p.model),
-    }, product),
+    }),
   );
 
   /**
@@ -132,9 +152,26 @@ const generateResults = (() => {
   // );
 
   /**
+   *
+   */
+  const getRelativePrice = listing =>
+    parseFloat(listing.price * currencyConversion[listing.currency]);
+
+  /**
    * Product'' -> Product'''
    */
-  // const filterOutlierListings = product => product;
+  const filterOutlierListings = (product) => {
+    const averagePrice = product.listings.reduce((sum, listing) =>
+      sum + getRelativePrice(listing),
+      0,
+    ) / product.listings.length;
+
+    return Object.assign({}, product, {
+      listings: product.listings.filter(listing =>
+        getRelativePrice(listing) > (averagePrice / 5),
+      ),
+    });
+  };
 
   /**
    * Consumes the products and listings, and outputs results in the specified
@@ -146,15 +183,9 @@ const generateResults = (() => {
    */
   return ({ products, listings }) => products
     .map(findSimilarModels(products))
-    // .map((product) => {
-    //   (product.similarModels.length === 0 ||
-    //     console.log(product.model, '\t', product.similarModels)
-    //   );
-    //   return product;
-    // })
     .map(augmentWithNaiveListings(listings))
     // .map(findSimilarListings(listings))
-    // .map(filterOutlierListings)
+    .map(filterOutlierListings)
     .map(R.pick(resultsProperties));
 })();
 
