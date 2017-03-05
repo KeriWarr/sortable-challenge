@@ -83,13 +83,12 @@ const generateResults = (() => {
    * For a given (Product, Listing) pair - return true iff all three of the
    * given tests pass.
    */
-  const naiveMatching = product => listing =>
-    R.allPass([
-      manufacturerRegexTest(product),
-      modelRegexTest(product),
-      familyRegexTest(product),
-      // similarModelTest(product),
-    ])(listing);
+  const naiveMatching = product => R.allPass([
+    manufacturerRegexTest(product),
+    modelRegexTest(product),
+    familyRegexTest(product),
+    similarModelTest(product),
+  ]);
 
   /**
    * [Listing] -> Product -> Product'
@@ -117,22 +116,25 @@ const generateResults = (() => {
       similarModels: products
         .filter(p =>
           (product.model !== p.model) &&
-          (R.test(makeLabelRegex(product.model), p.model)))
-        .map(p => p.model),
+          (R.test(
+            new RegExp(product.model.split('').join('.*'), 'i'),
+            p.model,
+          )),
+        ).map(p => p.model),
     }, product),
   );
 
   /**
    * [Listing] -> Product' -> Product''
    */
-  const findSimilarListings = R.curry((listings, product) =>
-    product,
-  );
+  // const findSimilarListings = R.curry((listings, product) =>
+  //   product,
+  // );
 
   /**
    * Product'' -> Product'''
    */
-  const filterOutlierListings = product => product;
+  // const filterOutlierListings = product => product;
 
   /**
    * Consumes the products and listings, and outputs results in the specified
@@ -142,13 +144,18 @@ const generateResults = (() => {
    * @param {[Listing]} listings
    * @returns {[Result]}
    */
-  return ({ products, listings }) =>
-    products
-      // .map(findSimilarModels(products))
-      .map(augmentWithNaiveListings(listings))
-      // .map(findSimilarListings(listings))
-      // .map(filterOutlierListings)
-      .map(R.pick(resultsProperties));
+  return ({ products, listings }) => products
+    .map(findSimilarModels(products))
+    // .map((product) => {
+    //   (product.similarModels.length === 0 ||
+    //     console.log(product.model, '\t', product.similarModels)
+    //   );
+    //   return product;
+    // })
+    .map(augmentWithNaiveListings(listings))
+    // .map(findSimilarListings(listings))
+    // .map(filterOutlierListings)
+    .map(R.pick(resultsProperties));
 })();
 
 
