@@ -12,7 +12,7 @@ const generateResults = (() => {
    * A regex fragment that matches any character which does not contirbute
    * to the meaning of a product label (model/family).
    */
-  const nonLabelChar = '[^a-z0-9]';
+  const nonLabelChar = '[^a-z0-9.]';
 
   /**
    * String -> String
@@ -61,10 +61,19 @@ const generateResults = (() => {
   /**
    * Product -> Listing -> Boolean
    *
-   * Tests that if the product has a famliy, the listings's title contains it.
+   * Tests that if[^a-z0-9] the product has a famliy, the listings's title contains it.
    */
   const familyRegexTest = ({ family }) => R.compose(
     R.test(family ? makeLabelRegex(family) : /(?:)/),
+    R.prop('title'),
+  );
+
+  /**
+   * Product -> Listing -> Boolean
+   */
+  const similarModelTest = ({ similarModels }) => R.compose(
+    R.not,
+    R.anyPass(similarModels.map(model => R.test(makeLabelRegex(model)))),
     R.prop('title'),
   );
 
@@ -74,38 +83,56 @@ const generateResults = (() => {
    * For a given (Product, Listing) pair - return true iff all three of the
    * given tests pass.
    */
-  const naiveMatching = product => R.allPass([
-    manufacturerRegexTest(product),
-    modelRegexTest(product),
-    familyRegexTest(product),
-  ]);
+  const naiveMatching = product => listing =>
+    R.allPass([
+      manufacturerRegexTest(product),
+      modelRegexTest(product),
+      familyRegexTest(product),
+      // similarModelTest(product),
+    ])(listing);
 
   /**
-   * [IndexedListing] -> Product -> Product'
+   * [Listing] -> Product -> Product'
    *
    * returns a product that has been augmented with all listings that naively
    * match it.
    */
-  const augmentProductWithListingIndices = R.curry((listings, product) =>
+  const augmentWithNaiveListings = R.curry((listings, product) =>
     Object.assign({}, {
-      listings: listings.reduce(
-        (filtered, listing, index) => (naiveMatching(product)(listing)
-          ? [...filtered, index]
-          : filtered
-        ),
-        [],
-      ),
-      // listings: listings.filter(naiveMatching(product))
+      listings: listings.filter(naiveMatching(product)),
     }, product),
   );
 
-  const resolveListings = R.curry((listings, product) =>
-    Object.assign({},
-      product,
-      { listings: product.listings.map(index => listings[index]) },
-    ),
+  /**
+   * [Product] -> Product -> Product
+   *
+   * Returns a product that has been augmented with all other product models
+   * for which this product's model might be mistaken
+   *
+   * e.g. a listing for a model that is a superstring this products model would
+   * otherwise be recognized as belonging to this model.
+   */
+  const findSimilarModels = R.curry((products, product) =>
+    Object.assign({}, {
+      similarModels: products
+        .filter(p =>
+          (product.model !== p.model) &&
+          (R.test(makeLabelRegex(product.model), p.model)))
+        .map(p => p.model),
+    }, product),
   );
 
+  /**
+   * [Listing] -> Product' -> Product''
+   */
+  const findSimilarListings = R.curry((listings, product) =>
+    product,
+  );
+
+  /**
+   * Product'' -> Product'''
+   */
+  const filterOutlierListings = product => product;
 
   /**
    * Consumes the products and listings, and outputs results in the specified
@@ -117,9 +144,11 @@ const generateResults = (() => {
    */
   return ({ products, listings }) =>
     products
-      .map(augmentProductWithListingIndices(listings))
-      .map(R.pick(resultsProperties))
-      .map(resolveListings(listings));
+      // .map(findSimilarModels(products))
+      .map(augmentWithNaiveListings(listings))
+      // .map(findSimilarListings(listings))
+      // .map(filterOutlierListings)
+      .map(R.pick(resultsProperties));
 })();
 
 
