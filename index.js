@@ -41,7 +41,8 @@ const generateResults = (() => {
    * not be characters which could be part of a label.
    */
   const makeLabelRegex = label => new RegExp(
-    `^(?:.*${nonLabelChar})?${matchAnyPunctuation(label)}(?:${nonLabelChar}.*)?$`,
+    `^(?:.*${nonLabelChar})?${matchAnyPunctuation(label)}` +
+    `(?:${nonLabelChar}.*)?$`,
     'i',
   );
 
@@ -62,6 +63,15 @@ const generateResults = (() => {
    */
   const modelRegexTest = ({ model }) => R.compose(
     R.test(makeLabelRegex(model)),
+    R.prop('title'),
+  );
+
+  const lenientModelRegexTest = ({ model }) => R.compose(
+    R.test(new RegExp(
+      `^(?:.*${nonLabelChar})?${matchAnyPunctuation(model)}` +
+      `${nonLabelChar}?[a-z]?(?:${nonLabelChar}.*)?$`,
+      'i',
+    )),
     R.prop('title'),
   );
 
@@ -97,7 +107,7 @@ const generateResults = (() => {
     similarModelTest(product),
   ]);
 
-  const ListingBonusRegex = /\+\s*\w{2,}\s+\w{2,}.*/;
+  const ListingBonusRegex = /(\+\s*\w{2,}\s+\w{2,}| bag[ ,]| fototasche[, ]| with | w\/ | for ).*/;
 
   /**
    * [Listing] -> Product -> Product'
@@ -144,12 +154,93 @@ const generateResults = (() => {
     }),
   );
 
+  const ListingRegex = /(\+\s*\w{2,}\s+\w{2,}| bag[ ,]| fototasche[, ]| for ).*/;
+  const listingNumberRegex = /\d+(\.\d+)?/g;
+
+  const extractListingNumbers = (title) => {
+    const matches = [];
+    let m;
+    do {
+      m = listingNumberRegex.exec(title);
+      if (m) {
+        matches.push(m[0]);
+      }
+    } while (m);
+    return matches;
+  };
+
+  const includesRegex = (regex, list) => R.any(R.test(regex), list);
+
+  const makeNumberRegex = (number) => {
+    const prePeriod = number.replace(/[.,].*/, '');
+    if (prePeriod.length >= 2) {
+      return new RegExp(prePeriod);
+    }
+    return new RegExp(number.replace(/[.,]/g, '[.,]'));
+  };
+
+  const checkNumbersMatch = (originalNumbers, matchingNumbers, onlyCheckSubset) => {
+    const originals = R.uniq(originalNumbers);
+    const matchings = R.uniq(matchingNumbers);
+
+    return (
+      R.all(
+        number => includesRegex(makeNumberRegex(number), matchings),
+        originals,
+      ) &&
+      (onlyCheckSubset || R.all(
+        number => includesRegex(makeNumberRegex(number), originals),
+        matchings,
+      ))
+    );
+  };
+
   /**
    * [Listing] -> Product' -> Product''
    */
-  // const findSimilarListings = R.curry((listings, product) =>
-  //   product,
-  // );
+  const findSimilarListings = R.curry((listings, product) => {
+    if (product.listings.length < 3 || product.model.length < 3) {
+      return product;
+    }
+
+    const productListingTitles = product.listings.map(
+      listing => listing.title.replace(ListingRegex, ''),
+    );
+    const productListingNumbers = productListingTitles.map(
+      extractListingNumbers,
+    );
+
+    if (productListingNumbers[0].length < 2) return product;
+
+    const numbersMatch = R.all(
+      numbers => checkNumbersMatch(numbers, productListingNumbers[0]),
+      productListingNumbers.slice(1),
+    );
+
+    if (numbersMatch) {
+      return Object.assign({}, product, {
+        listings: product.listings.concat(listings.filter(
+          R.allPass([
+            R.compose(
+              R.not,
+              naiveMatching(product),
+            ),
+            R.allPass([
+              manufacturerRegexTest(product),
+              lenientModelRegexTest(product),
+              similarModelTest(product),
+              listing => checkNumbersMatch(
+                productListingNumbers[0],
+                extractListingNumbers(listing.title.replace(ListingRegex, '')),
+                true,
+              ),
+            ]),
+          ]),
+        )),
+      });
+    }
+    return product;
+  });
 
   /**
    *
@@ -184,8 +275,8 @@ const generateResults = (() => {
   return ({ products, listings }) => products
     .map(findSimilarModels(products))
     .map(augmentWithNaiveListings(listings))
-    // .map(findSimilarListings(listings))
     .map(filterOutlierListings)
+    .map(findSimilarListings(listings))
     .map(R.pick(resultsProperties));
 })();
 
