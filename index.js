@@ -14,13 +14,6 @@ const generateResults = (() => {
    */
   const nonLabelChar = '[^a-z0-9.]';
 
-  const currencyConversion = {
-    CAD: 1,
-    USD: 1.21,
-    GBP: 1.83,
-    EUR: 1.37,
-  };
-
   /**
    * String -> String
    *
@@ -66,6 +59,7 @@ const generateResults = (() => {
     R.prop('title'),
   );
 
+  // Like the modelRegexTest except allows an extra trailing letter.
   const lenientModelRegexTest = ({ model }) => R.compose(
     R.test(new RegExp(
       `^(?:.*${nonLabelChar})?${matchAnyPunctuation(model)}` +
@@ -100,13 +94,17 @@ const generateResults = (() => {
    * For a given (Product, Listing) pair - return true iff all three of the
    * given tests pass.
    */
-  const naiveMatching = product => R.allPass([
+  const basicMatching = product => R.allPass([
     manufacturerRegexTest(product),
     modelRegexTest(product),
     familyRegexTest(product),
     similarModelTest(product),
   ]);
 
+  /**
+   * This regex is used to match suffixes of listings which contain data that
+   * aren't useful for identifying the product.
+   */
   const ListingBonusRegex = /(\+\s*\w{2,}\s+\w{2,}| bag[ ,]| fototasche[, ]| with | w\/ | for ).*/;
 
   /**
@@ -127,7 +125,7 @@ const generateResults = (() => {
 
     return product => Object.assign({}, product, {
       listings: workingListings
-        .filter(naiveMatching(product))
+        .filter(basicMatching(product))
         .map(listing => listing.listing),
     });
   };
@@ -154,9 +152,15 @@ const generateResults = (() => {
     }),
   );
 
+  /**
+   * This regex is used to match suffixes of listings which contain data that
+   * aren't useful for providing additional identification of the product.
+   */
   const ListingRegex = /(\+\s*\w{2,}\s+\w{2,}| bag[ ,]| fototasche[, ]| for ).*/;
+  // Matches numbers which may have a decimal in them
   const listingNumberRegex = /\d+(\.\d+)?/g;
 
+  // Consumes a string and returns an array of number strings which it contains
   const extractListingNumbers = (title) => {
     const matches = [];
     let m;
@@ -169,8 +173,13 @@ const generateResults = (() => {
     return matches;
   };
 
+  // Checks that an array includes a string which tests true for some regex.
   const includesRegex = (regex, list) => R.any(R.test(regex), list);
 
+  /**
+   * Constructs a RegExp using a number, which allows for european decimal
+   * notation as well as rounding of sufficiently large numbers.
+   */
   const makeNumberRegex = (number) => {
     const prePeriod = number.replace(/[.,].*/, '');
     if (prePeriod.length >= 2) {
@@ -179,6 +188,9 @@ const generateResults = (() => {
     return new RegExp(number.replace(/[.,]/g, '[.,]'));
   };
 
+  /**
+   * Checks that the the two arrays of numbers are mutually inclusive.
+   */
   const checkNumbersMatch = (originalNumbers, matchingNumbers, onlyCheckSubset) => {
     const originals = R.uniq(originalNumbers);
     const matchings = R.uniq(matchingNumbers);
@@ -196,16 +208,40 @@ const generateResults = (() => {
   };
 
   /**
+   * Compared to the basic matching test, this one doesn't check that the
+   * listing contains the family of the product, it allows the model to have
+   * an additional letter after it (colors) and it ensures that the new listing
+   * contains all of the numbers that were found in the existing listings.
+   */
+  const lenientMatching = (product, numbers) => R.allPass([
+    manufacturerRegexTest(product),
+    lenientModelRegexTest(product),
+    similarModelTest(product),
+    listing => checkNumbersMatch(
+      numbers,
+      extractListingNumbers(listing.title.replace(ListingRegex, '')),
+      true,
+    ),
+  ]);
+
+  /**
    * [Listing] -> Product' -> Product''
+   *
+   * Finds other listings using the existing ones as a basis.
+   * This is done by comparing the number values inside the existing listing
+   * titles.
    */
   const findSimilarListings = R.curry((listings, product) => {
+    // Not enough info to reliably detect similar models
     if (product.listings.length < 3 || product.model.length < 3) {
       return product;
     }
 
+    // Remove extraneous data
     const productListingTitles = product.listings.map(
       listing => listing.title.replace(ListingRegex, ''),
     );
+    // Extract number values from listing title
     const productListingNumbers = productListingTitles.map(
       extractListingNumbers,
     );
@@ -217,39 +253,54 @@ const generateResults = (() => {
       productListingNumbers.slice(1),
     );
 
+    /**
+     * If all the found listings contain numbers that are approximately
+     * equivalent, find listings according to a more lenient test and
+     * incorporate them.
+     */
     if (numbersMatch) {
       return Object.assign({}, product, {
         listings: product.listings.concat(listings.filter(
           R.allPass([
             R.compose(
               R.not,
-              naiveMatching(product),
+              basicMatching(product),
             ),
-            R.allPass([
-              manufacturerRegexTest(product),
-              lenientModelRegexTest(product),
-              similarModelTest(product),
-              listing => checkNumbersMatch(
-                productListingNumbers[0],
-                extractListingNumbers(listing.title.replace(ListingRegex, '')),
-                true,
-              ),
-            ]),
+            lenientMatching(product, productListingNumbers[0]),
           ]),
         )),
       });
     }
+
     return product;
   });
 
+  const currencyConversion = {
+    CAD: 1,
+    USD: 1.21,
+    GBP: 1.83,
+    EUR: 1.37,
+  };
+
   /**
+   * Listing -> Number
    *
+   * Consumes a listing and returns a price for that listing, adjusted to
+   * a common currency.
    */
   const getRelativePrice = listing =>
     parseFloat(listing.price * currencyConversion[listing.currency]);
 
+
+  const belowPriceFactorThreshold = 5;
+
   /**
    * Product'' -> Product'''
+   *
+   * Removes all matched listings that have a price which is lower than
+   * the average listing price by the given factor.
+   *
+   * This is useful for filtering out listings that are accessories.
    */
   const filterOutlierListings = (product) => {
     const averagePrice = product.listings.reduce((sum, listing) =>
@@ -259,7 +310,7 @@ const generateResults = (() => {
 
     return Object.assign({}, product, {
       listings: product.listings.filter(listing =>
-        getRelativePrice(listing) > (averagePrice / 5),
+        getRelativePrice(listing) > (averagePrice / belowPriceFactorThreshold),
       ),
     });
   };
